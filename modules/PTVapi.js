@@ -5,6 +5,13 @@ const moment = require('moment');
 const baseURL = 'https://timetableapi.ptv.vic.gov.au';
 const apiKey = process.env.API_KEY;
 const devID = process.env.DEV_ID;
+// const signature = encryp
+
+
+//Testing showing delays
+getDelaysForRoute(5);
+
+
 
 // Time of last Client API call (Date().getTime())
 let lastUpdate;
@@ -12,6 +19,26 @@ let lastUpdate;
 // Generate signature for the API request
 function encryptSignature(url) {
     return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
+}
+
+async function getDelaysForRoute(route_id){
+    const request = `/v3/disruptions/route/${route_id}?devid=${devID}`;
+    const signature = encryptSignature(request);
+
+    console.log("looking for route with id : " + route_id);
+
+    const delays = await axios.get(baseURL + request + '&signature=' + signature)
+        .then(response => {
+            console.log("Found stop with name : " + response.data.disruptions.metro_train[0].routes[0].route_name);
+            console.log("The disruption is : " + response.data.disruptions.metro_train[0].description);
+            return response.data.disruptions;
+        })
+        .catch(error => {
+            console.log("catching error");
+            console.log(error);
+            return [];
+        })
+    return delays
 }
 
 function compareStops(a, b) {
@@ -27,6 +54,8 @@ function compareStops(a, b) {
 
     return comparison;
 }
+
+
 
 // Used to determine where a route ID is inside of the route descriptions
 function getRouteIndex(route, route_id) {
@@ -63,6 +92,7 @@ async function getDeparturesForStop(stop_id, route_type) {
             console.log(error);
             return [];
         })
+        // console.log("sending: " + baseURL + request + '&signature=' + signature);
     return departures;
 }
 
@@ -93,6 +123,7 @@ module.exports = {
                 return response;
             })
             .catch(error => {
+                console.log("error in their catch")
                 console.log(error);
             })
         return result;
@@ -227,7 +258,7 @@ module.exports = {
                         currentDeparture: currentDeparture
                     };
                     console.log("(" + i + "/" + uniqueRunIDs.length +
-                                ") Updating RunID " + run_id);
+                                ") Updating RunIDasdasdasdsd " + run_id);
                     runDepartures.push(runIDDepartures);
 
                     // Append departures from a runID to associated station departure array

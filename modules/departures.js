@@ -78,6 +78,7 @@ module.exports = {
         const xCoordinate = (scalar * previousStopCoordinates[0]) + ((1 - scalar) * nextStopCoordinates[0]);
         const yCoordinate = (scalar * previousStopCoordinates[1]) + ((1 - scalar) * nextStopCoordinates[1]);
 
+        console.log("Train is at : " + xCoordinate + "," + yCoordinate);
         return [xCoordinate, yCoordinate];
     },
 
