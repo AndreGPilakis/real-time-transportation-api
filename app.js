@@ -385,6 +385,12 @@ app.use('/refresh', function (req, res, next) {
   }
 });
 
+app.use('/disruptions', function (req, res, next) {
+  let param = req.query.ID;
+  console.log("my disruptions with id" + param);
+  res.send("my response");
+});
+
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
   next(createError(404));
