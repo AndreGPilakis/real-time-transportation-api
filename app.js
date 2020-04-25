@@ -1,6 +1,14 @@
 // Load environment variables
 require('dotenv').config();
 
+const axios = require('axios');
+const crypto = require('crypto');
+const moment = require('moment');
+
+const baseURL = 'https://timetableapi.ptv.vic.gov.au';
+const apiKey = process.env.API_KEY;
+const devID = process.env.DEV_ID;
+
 const createError = require('http-errors');
 const express = require('express');
 const path = require('path');
@@ -385,11 +393,41 @@ app.use('/refresh', function (req, res, next) {
   }
 });
 
+//Displaying disruptions
 app.use('/disruptions', function (req, res, next) {
-  let param = req.query.ID;
-  console.log("my disruptions with id" + param);
-  res.send("my response");
+  getDelaysForRoute(req.query.ID,res);
+
 });
+
+//encrypts a signature
+function encryptSignature(url) {
+  return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
+}
+
+//@TODO Move to PTVapi.js, make method less overloaded.
+//gets delays for a route
+async function getDelaysForRoute(route_id, res){
+  const request = `/v3/disruptions/route/${route_id}?devid=${devID}`;
+  const signature = encryptSignature(request);
+
+  console.log("looking for route with id : " + route_id);
+
+  const delays = await axios.get(baseURL + request + '&signature=' + signature)
+      .then(response => {
+          console.log("Found stop with name : " + response.data.disruptions.metro_train[0].routes[0].route_name);
+          console.log("The disruption is : " + response.data.disruptions.metro_train[0].description);
+          res.send(response.data.disruptions);
+          return response.data.disruptions;
+      })
+      .catch(error => {
+          console.log("catching error");
+          console.log(error);
+          return [];
+      })
+  return delays
+}
+
+
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
