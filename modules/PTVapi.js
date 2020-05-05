@@ -1,17 +1,24 @@
 const axios = require('axios');
 const crypto = require('crypto');
 const moment = require('moment');
+var mysql = require('mysql');
+
 
 const baseURL = 'https://timetableapi.ptv.vic.gov.au';
 const apiKey = process.env.API_KEY;
 const devID = process.env.DEV_ID;
-// const signature = encryp
 
+//Connecting to db
+//@TODO Change user/pass
+//@TODO Move SQL to new place?
+var con = mysql.createConnection({
+    host: "localhost",
+    user: "andre",
+    password: "ptv123",
+    database: "ptv"
+  });
 
-//Testing showing delays
-getDelaysForRoute(5);
-
-
+initializeDatabase(con);
 
 // Time of last Client API call (Date().getTime())
 let lastUpdate;
@@ -25,16 +32,11 @@ async function getDelaysForRoute(route_id){
     const request = `/v3/disruptions/route/${route_id}?devid=${devID}`;
     const signature = encryptSignature(request);
 
-    console.log("looking for route with id : " + route_id);
-
     const delays = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            console.log("Found stop with name : " + response.data.disruptions.metro_train[0].routes[0].route_name);
-            console.log("The disruption is : " + response.data.disruptions.metro_train[0].description);
             return response.data.disruptions;
         })
         .catch(error => {
-            console.log("catching error");
             console.log(error);
             return [];
         })
@@ -80,19 +82,19 @@ function getStationIndex(stops, stop_id) {
 }
 
 // Call to PTV API to get all departures for a specific stop
-async function getDeparturesForStop(stop_id, route_type) {
+async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
     const departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
+            saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
             console.log(error);
             return [];
         })
-        // console.log("sending: " + baseURL + request + '&signature=' + signature);
     return departures;
 }
 
@@ -103,6 +105,7 @@ async function getDeparturesForRun(run_id, route_type) {
 
     const departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
+            console.log("Departures for run");
             return response.data.departures;
         })
         .catch(error => {
@@ -110,6 +113,53 @@ async function getDeparturesForRun(run_id, route_type) {
             return [];
         })
     return departures;
+}
+
+//Creates the database schema if it does not currently exist in the database.
+function initializeDatabase(con){
+//Departures table for by stop
+createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber int, departureSequence int, timestamp datetime)");
+}
+
+//saves a Departue to the database whenever an api call is made.
+function saveDepartureToDatabase(con,data){
+    console.log(data[0].stop_id);
+    var sql = `INSERT INTO departures (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
+    VALUES (${data[0].stop_id}, ${data[0].route_id}, ${data[0].run_id}, ${data[0].direction_id}, '${convertToDateTime(data[0].scheduled_departure_utc)}', '${convertToDateTime(data[0].estimated_departure_utc)}', ${data[0].at_platform}, ${data[0].platform_number}, ${data[0].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
+        console.log("attempting to exec: " + sql);
+        con.query(sql, function (err, result) {
+          if (err) throw err;
+        });
+}
+
+//Converts the given date time to a format the SQL database will accept
+function convertToDateTime(dateTime){
+    let splitTime = dateTime.split("T");
+    //drop Z flag from end of string and split on T flag
+    let newDate = (splitTime[0] + " " + splitTime[1]).slice(0,-1);
+    return newDate;
+}
+
+//returns the current dateTime in a format for the SQL database
+function getCurrentDateTimeFromatted(){
+    var currentdate = new Date();
+    var datetime = currentdate.getFullYear() + "-" + currentdate.getMonth() 
+    + "-" + currentdate.getDay() + " " 
+    + ("0" + currentdate.getHours()).slice(-2) + ":" 
+    + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("0" + currentdate.getSeconds()).slice(-2);
+    return datetime;
+}
+
+//Function to create a table, takes in an sql Statement and handles errors to avoid code dupelication
+function createTable(con, sql){
+    con.connect(function(err) {
+        if (err) throw err;
+        console.log("Attempting to execute " + sql);
+        con.query(sql, function (err, result) {
+          if (err) throw err;
+          console.log("Table created");
+        });
+      });
 }
 
 module.exports = {
@@ -123,7 +173,6 @@ module.exports = {
                 return response;
             })
             .catch(error => {
-                console.log("error in their catch")
                 console.log(error);
             })
         return result;
@@ -173,7 +222,7 @@ module.exports = {
                 stop_name: stop.stop_name,
                 stop_latitude: stop.stop_latitude,
                 stop_longitude: stop.stop_longitude,
-                departures: await getDeparturesForStop(stop.stop_id, route_type)
+                departures: await getDeparturesForStop(stop.stop_id, route_type, con)
                 .then(response => {
                     return response;
                 })
@@ -319,3 +368,4 @@ module.exports = {
         return lastUpdate;
     }
 };
+
