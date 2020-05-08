@@ -28,21 +28,6 @@ function encryptSignature(url) {
     return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
 }
 
-async function getDelaysForRoute(route_id){
-    const request = `/v3/disruptions/route/${route_id}?devid=${devID}`;
-    const signature = encryptSignature(request);
-
-    const delays = await axios.get(baseURL + request + '&signature=' + signature)
-        .then(response => {
-            return response.data.disruptions;
-        })
-        .catch(error => {
-            console.log(error);
-            return [];
-        })
-    return delays
-}
-
 function compareStops(a, b) {
     const aStopSequence = a.stop_sequence;
     const bStopSequence = b.stop_sequence;
@@ -56,8 +41,6 @@ function compareStops(a, b) {
 
     return comparison;
 }
-
-
 
 // Used to determine where a route ID is inside of the route descriptions
 function getRouteIndex(route, route_id) {
@@ -86,8 +69,13 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
-    const departures = await axios.get(baseURL + request + '&signature=' + signature)
+    var currentTime = false;
+    var departures;
+
+    if(currentTime){
+    departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
+            console.log(response.data.departures);
             saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
         })
@@ -95,6 +83,34 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             console.log(error);
             return [];
         })
+    } else{
+        console.log("---start---");
+        con.query("Select * from departures WHERE stopID = 1222 AND timestamp = '2020-04-05 06:35:00'", function (err, result, fields) {
+            if (err) throw err;
+            //adds each row from the query to a JSON object
+            var myJSON = []
+            for (i = 0; i < result.length -1; i++){
+                let formattedQuery = 
+                `stop_id : ${result[i].stopID}`
+                myJSON.push(formattedQuery);
+            }
+            console.log(myJSON);
+            // var myJSON = [];
+            // var obj1 = {
+            //     "var134242342343242342" : "val12342424243234234"
+            // }
+
+            // var obj2 = {
+            //     "var223424234234234234" : "val234242342342"
+            // }
+            // myJSON.push(obj1);
+            // myJSON.push(obj2);
+            // console.log(myJSON);
+
+            // console.log(result[0]);
+            console.log("---end---");
+          });
+    }
     return departures;
 }
 
@@ -123,20 +139,23 @@ createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, 
 
 //saves a Departue to the database whenever an api call is made.
 function saveDepartureToDatabase(con,data){
-    console.log(data[0].stop_id);
+    for (i = 0; i <=data.length-1; i++){
     var sql = `INSERT INTO departures (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
-    VALUES (${data[0].stop_id}, ${data[0].route_id}, ${data[0].run_id}, ${data[0].direction_id}, '${convertToDateTime(data[0].scheduled_departure_utc)}', '${convertToDateTime(data[0].estimated_departure_utc)}', ${data[0].at_platform}, ${data[0].platform_number}, ${data[0].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
-        console.log("attempting to exec: " + sql);
+    VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${convertToDateTime(data[i].scheduled_departure_utc)}, ${convertToDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, ${data[i].platform_number}, ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
         con.query(sql, function (err, result) {
           if (err) throw err;
         });
+    }
 }
 
-//Converts the given date time to a format the SQL database will accept
+//Converts the given date time to a format the SQL database will accept. Quotes needed to be added for NULL values.
 function convertToDateTime(dateTime){
+    if (dateTime === null){
+        return "NULL";
+    }
     let splitTime = dateTime.split("T");
     //drop Z flag from end of string and split on T flag
-    let newDate = (splitTime[0] + " " + splitTime[1]).slice(0,-1);
+    let newDate = "'" + (splitTime[0] + " " + splitTime[1]).slice(0,-3) + "00'";
     return newDate;
 }
 
@@ -146,7 +165,7 @@ function getCurrentDateTimeFromatted(){
     var datetime = currentdate.getFullYear() + "-" + currentdate.getMonth() 
     + "-" + currentdate.getDay() + " " 
     + ("0" + currentdate.getHours()).slice(-2) + ":" 
-    + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("0" + currentdate.getSeconds()).slice(-2);
+    + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("00");
     return datetime;
 }
 

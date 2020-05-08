@@ -396,7 +396,6 @@ app.use('/refresh', function (req, res, next) {
 //Displaying disruptions
 app.use('/disruptions', function (req, res, next) {
   getDelaysForRoute(req.query.ID,res);
-
 });
 
 //encrypts a signature
@@ -404,7 +403,7 @@ function encryptSignature(url) {
   return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
 }
 
-//@TODO Move to PTVapi.js, make method less overloaded.
+//@TODO Move to PTVapi.js
 //gets delays for a route
 async function getDelaysForRoute(route_id, res){
   const request = `/v3/disruptions/route/${route_id}?devid=${devID}`;
@@ -415,7 +414,7 @@ async function getDelaysForRoute(route_id, res){
   const delays = await axios.get(baseURL + request + '&signature=' + signature)
       .then(response => {
           console.log("Found stop with name : " + response.data.disruptions.metro_train[0].routes[0].route_name);
-          console.log("The disruption is : " + response.data.disruptions.metro_train[0].description);
+          console.log(response.data.disruptions);
           res.send(response.data.disruptions);
           return response.data.disruptions;
       })
