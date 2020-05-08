@@ -75,8 +75,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     if(currentTime){
     departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            console.log("S");
-            console.log(response.data.departures);
+            // console.log(response.data.departures);
             saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
         })
@@ -86,20 +85,25 @@ async function getDeparturesForStop(stop_id, route_type, con) {
         })
     } else{
         console.log("---start---");
-        //@TODO fix queries.
-        con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-05 13:41:00'`, function (err, result, fields) {
+        //@TODO fix queries. Hardcoded timestamp for testing.
+        con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
             if (err) throw err;
             let JSONTemplate = "[";
             for (i = 0; i < result.length -1; i++){
                 if (i > 0){
                     JSONTemplate += ","
                 }
-                JSONTemplate += `{"stop_id": ${result[i].stopID}}`
+                JSONTemplate += `
+                {
+                    "stop_id": ${result[i].stopID},
+                    "route_id": ${result[i].routeID},"run_id": ${result[i].runID}}`
             }
             JSONTemplate += "]";
-            console.log(JSONTemplate);
-            let JSONobj = JSON.parse(JSONTemplate);
+            console.log("----start-----");
+            let JSONobj = JSON.parse((JSONTemplate));
             console.log(JSONobj);
+            // console.log(JSONobj[0] ? JSONobj[0].stop_id : "none");
+            console.log("------end------");
           });
     }
     return departures;
