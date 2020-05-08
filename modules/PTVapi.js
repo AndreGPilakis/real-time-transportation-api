@@ -75,6 +75,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     if(currentTime){
     departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
+            console.log("S");
             console.log(response.data.departures);
             saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
@@ -85,30 +86,20 @@ async function getDeparturesForStop(stop_id, route_type, con) {
         })
     } else{
         console.log("---start---");
-        con.query("Select * from departures WHERE stopID = 1222 AND timestamp = '2020-04-05 06:35:00'", function (err, result, fields) {
+        //@TODO fix queries.
+        con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-05 13:41:00'`, function (err, result, fields) {
             if (err) throw err;
-            //adds each row from the query to a JSON object
-            var myJSON = []
+            let JSONTemplate = "[";
             for (i = 0; i < result.length -1; i++){
-                let formattedQuery = 
-                `stop_id : ${result[i].stopID}`
-                myJSON.push(formattedQuery);
+                if (i > 0){
+                    JSONTemplate += ","
+                }
+                JSONTemplate += `{"stop_id": ${result[i].stopID}}`
             }
-            console.log(myJSON);
-            // var myJSON = [];
-            // var obj1 = {
-            //     "var134242342343242342" : "val12342424243234234"
-            // }
-
-            // var obj2 = {
-            //     "var223424234234234234" : "val234242342342"
-            // }
-            // myJSON.push(obj1);
-            // myJSON.push(obj2);
-            // console.log(myJSON);
-
-            // console.log(result[0]);
-            console.log("---end---");
+            JSONTemplate += "]";
+            console.log(JSONTemplate);
+            let JSONobj = JSON.parse(JSONTemplate);
+            console.log(JSONobj);
           });
     }
     return departures;
@@ -163,7 +154,7 @@ function convertToDateTime(dateTime){
 function getCurrentDateTimeFromatted(){
     var currentdate = new Date();
     var datetime = currentdate.getFullYear() + "-" + currentdate.getMonth() 
-    + "-" + currentdate.getDay() + " " 
+    + "-" + currentdate.getDate() + " " 
     + ("0" + currentdate.getHours()).slice(-2) + ":" 
     + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("00");
     return datetime;
