@@ -86,15 +86,10 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        departures = con.query("Select * FROM departures").then()
-        // .then(response => {
-        //     console.log("response is:");
-        //     console.log(response);
-        // })
+        departures = await getDeparturesFromDatabase(con,stop_id);
     }
-    console.log("departures is : ");
+    console.log("departures is: ");
     console.log(departures);
-
     return departures;
 }
 
