@@ -64,6 +64,7 @@ function getStationIndex(stops, stop_id) {
     return result;
 }
 
+//@TODO declutter this method.
 // Call to PTV API to get all departures for a specific stop
 async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
@@ -96,7 +97,13 @@ async function getDeparturesForStop(stop_id, route_type, con) {
                 JSONTemplate += `
                 {
                     "stop_id": ${result[i].stopID},
-                    "route_id": ${result[i].routeID},"run_id": ${result[i].runID}}`
+                    "route_id": ${result[i].routeID},
+                    "run_id": ${result[i].runID},
+                    "direction_id" : ${results[i].direction_id},
+                    "disruption_ids" : [],
+                    "scheduled_departure_utc" : ${results[i].scheduled_departure_utc}
+                    `
+                    
             }
             JSONTemplate += "]";
             console.log("----start-----");
@@ -136,15 +143,16 @@ createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, 
 function saveDepartureToDatabase(con,data){
     for (i = 0; i <=data.length-1; i++){
     var sql = `INSERT INTO departures (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
-    VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${convertToDateTime(data[i].scheduled_departure_utc)}, ${convertToDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, ${data[i].platform_number}, ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
+    VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, ${data[i].platform_number}, ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
         con.query(sql, function (err, result) {
           if (err) throw err;
         });
     }
 }
 
-//Converts the given date time to a format the SQL database will accept. Quotes needed to be added for NULL values.
-function convertToDateTime(dateTime){
+//Converts time format from 'YYYY-MM-DDTHH:MM:SSZ' -> 'YYYY-MM-DD HH:MM:SS'
+//Seconds are left as 00 to avoid too much variance in times when backtracking.
+function removeFlagsFromDateTime(dateTime){
     if (dateTime === null){
         return "NULL";
     }
