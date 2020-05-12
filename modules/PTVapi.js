@@ -70,7 +70,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
-    var currentTime = true;
+    var currentTime = false;
     var departures;
 
     if(currentTime){
@@ -86,36 +86,51 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        //@TODO fix queries. Hardcoded timestamp for testing.
-        con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
-            if (err) throw err;
-            let JSONTemplate = "[";
-            for (i = 0; i < result.length -1; i++){
-                if (i > 0){
-                    JSONTemplate += ","
-                }
-                JSONTemplate += `
-                {
-                    "stop_id": ${result[i].stopID},
-                    "route_id": ${result[i].routeID},
-                    "run_id": ${result[i].runID},
-                    "direction_id" : ${result[i].directionID},
-                    "disruption_ids" : [],
-                    "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
-                    "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
-                    "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
-                    "platform_number" : "${result[i].platformNumber}",
-                    "flags" : "",
-                    "departure_sequence" : ${result[i].departureSequence}
-                }`
-            }
-            JSONTemplate += "]";
-            let JSONData = JSON.parse((JSONTemplate));
-            console.log(JSONData);
-            departures = JSONData;
-          });
+        departures = con.query("Select * FROM departures").then()
+        // .then(response => {
+        //     console.log("response is:");
+        //     console.log(response);
+        // })
     }
+    console.log("departures is : ");
+    console.log(departures);
+
     return departures;
+}
+
+async function getDeparturesFromDatabase(con,stop_id){
+    
+    //@TODO fix queries. Hardcoded timestamp for testing.
+    con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
+        if (err) throw err;
+        let JSONTemplate = "[";
+        for (i = 0; i < result.length -1; i++){
+            if (i > 0){
+                JSONTemplate += ","
+            }
+            JSONTemplate += `
+            {
+                "stop_id": ${result[i].stopID},
+                "route_id": ${result[i].routeID},
+                "run_id": ${result[i].runID},
+                "direction_id" : ${result[i].directionID},
+                "disruption_ids" : [],
+                "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
+                "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
+                "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
+                "platform_number" : "${result[i].platformNumber}",
+                "flags" : "",
+                "departure_sequence" : ${result[i].departureSequence}
+            }`
+        }
+        
+        JSONTemplate += "]";
+        let JSONData = JSON.parse((JSONTemplate));
+        console.log("JSON DATA IS:");
+        console.log(JSONData);
+        
+        // return JSONData;
+      });
 }
 
 // Call to PTV API to get all departures for a specific run ID
@@ -255,6 +270,7 @@ module.exports = {
                 stop_latitude: stop.stop_latitude,
                 stop_longitude: stop.stop_longitude,
                 // departures: getDeparturesForStop(stop.stop_id, route_type, con)
+               
                 departures: await getDeparturesForStop(stop.stop_id, route_type, con)
                 .then(response => {
                     console.log("Is getting something from await");
