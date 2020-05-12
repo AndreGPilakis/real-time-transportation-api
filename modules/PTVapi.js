@@ -70,7 +70,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
-    var currentTime = false;
+    var currentTime = true;
     var departures;
 
     if(currentTime){
@@ -78,7 +78,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
         .then(response => {
             // console.log(response.data.departures);
             saveDepartureToDatabase(con,response.data.departures);
-            console.log(response.data.departures);
+            // console.log(response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
@@ -88,8 +88,8 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     } else{
         departures = await getDeparturesFromDatabase(con,stop_id);
     }
-    console.log("departures is: ");
-    console.log(departures);
+    // console.log("departures is: ");
+    // console.log(departures);
     return departures;
 }
 
@@ -196,10 +196,8 @@ function convertDateTimeToApiFormat(dateTime){
 function createTable(con, sql){
     con.connect(function(err) {
         if (err) throw err;
-        console.log("Attempting to execute " + sql);
         con.query(sql, function (err, result) {
           if (err) throw err;
-          console.log("Table created");
         });
       });
 }
@@ -265,10 +263,9 @@ module.exports = {
                 stop_latitude: stop.stop_latitude,
                 stop_longitude: stop.stop_longitude,
                 // departures: getDeparturesForStop(stop.stop_id, route_type, con)
-               
                 departures: await getDeparturesForStop(stop.stop_id, route_type, con)
                 .then(response => {
-                    console.log("Is getting something from await");
+                    // console.log("Is getting something from await");
                     return response;
                 })
                 .catch(error => {

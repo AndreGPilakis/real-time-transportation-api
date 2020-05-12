@@ -398,10 +398,38 @@ app.use('/disruptions', function (req, res, next) {
   getDelaysForRoute(req.query.ID,res);
 });
 
+//Getting nearby MyKi Readers
+app.use('/mykireaders', function (req, res, next){
+  getMyKiReaders(req.query.latitude, req.query.longitude, res);
+});
+
 
 //encrypts a signature
 function encryptSignature(url) {
   return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
+}
+
+
+//@TODO move to PTVapi.js
+async function getMyKiReaders(latitude,longitude,res){
+  //distance in meters that will be searched
+  const max_distance = 1000;
+  //amount of stations to show
+  const max_results = 5;
+  const request =`/v3/outlets/location/${latitude},${longitude}?max_distance=${max_distance}&max_results=${max_results}&devid=${devID}`;
+  const signature = encryptSignature(request);
+
+  const mykiStations = await axios.get(baseURL + request + '&signature=' + signature)
+  .then(response => {
+    console.log(response.data.outlets);
+    res.send(response.data.outlets);
+    return response.data.outlets;
+})
+.catch(error => {
+    console.log(error);
+    return [];
+})
+return mykiStations
 }
 
 //@TODO Move to PTVapi.js
