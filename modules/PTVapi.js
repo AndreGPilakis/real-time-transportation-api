@@ -99,14 +99,15 @@ async function getDeparturesForStop(stop_id, route_type, con) {
                     "stop_id": ${result[i].stopID},
                     "route_id": ${result[i].routeID},
                     "run_id": ${result[i].runID},
-                    "direction_id" : ${results[i].direction_id},
+                    "direction_id" : ${result[i].directionID},
                     "disruption_ids" : [],
-                    "scheduled_departure_utc" : ${results[i].scheduled_departure_utc}
-                    `
-                    
+                    "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}"
+                }`
+
             }
             JSONTemplate += "]";
             console.log("----start-----");
+            console.log(JSONTemplate);
             let JSONobj = JSON.parse((JSONTemplate));
             console.log(JSONobj);
             // console.log(JSONobj[0] ? JSONobj[0].stop_id : "none");
@@ -162,6 +163,7 @@ function removeFlagsFromDateTime(dateTime){
     return newDate;
 }
 
+//@TODO These methods are similar, possibly refractor?
 //returns the current dateTime in a format for the SQL database
 function getCurrentDateTimeFromatted(){
     var currentdate = new Date();
@@ -170,6 +172,13 @@ function getCurrentDateTimeFromatted(){
     + ("0" + currentdate.getHours()).slice(-2) + ":" 
     + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("00");
     return datetime;
+}
+
+//Formats dateTime object FROM the SQL database back to the PTV API format 'YYYY-MM-DDTHH:MM:SSZ'
+function convertDateTimeToApiFormat(dateTime){
+    let dateObj = new Date(dateTime)
+    let formatedDate = `${dateObj.getFullYear()}-${("0"+dateObj.getMonth()).slice(-2)}-${("0"+dateObj.getDate()).slice(-2)}T${("0"+dateObj.getHours()).slice(-2)}:${("0"+dateObj.getMinutes()).slice(-2)}:00Z`
+    return formatedDate;
 }
 
 //Function to create a table, takes in an sql Statement and handles errors to avoid code dupelication
