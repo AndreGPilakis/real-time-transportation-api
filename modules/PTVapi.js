@@ -70,7 +70,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
-    var currentTime = false;
+    var currentTime = true;
     var departures;
 
     if(currentTime){
@@ -78,6 +78,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
         .then(response => {
             // console.log(response.data.departures);
             saveDepartureToDatabase(con,response.data.departures);
+            console.log(response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
@@ -85,7 +86,6 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        console.log("---start---");
         //@TODO fix queries. Hardcoded timestamp for testing.
         con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
             if (err) throw err;
@@ -101,17 +101,18 @@ async function getDeparturesForStop(stop_id, route_type, con) {
                     "run_id": ${result[i].runID},
                     "direction_id" : ${result[i].directionID},
                     "disruption_ids" : [],
-                    "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}"
+                    "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
+                    "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
+                    "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
+                    "platform_number" : "${result[i].platformNumber}",
+                    "flags" : "",
+                    "departure_sequence" : ${result[i].departureSequence}
                 }`
-
             }
             JSONTemplate += "]";
-            console.log("----start-----");
-            console.log(JSONTemplate);
-            let JSONobj = JSON.parse((JSONTemplate));
-            console.log(JSONobj);
-            // console.log(JSONobj[0] ? JSONobj[0].stop_id : "none");
-            console.log("------end------");
+            let JSONData = JSON.parse((JSONTemplate));
+            console.log(JSONData);
+            departures = JSONData;
           });
     }
     return departures;
@@ -253,8 +254,10 @@ module.exports = {
                 stop_name: stop.stop_name,
                 stop_latitude: stop.stop_latitude,
                 stop_longitude: stop.stop_longitude,
+                // departures: getDeparturesForStop(stop.stop_id, route_type, con)
                 departures: await getDeparturesForStop(stop.stop_id, route_type, con)
                 .then(response => {
+                    console.log("Is getting something from await");
                     return response;
                 })
                 .catch(error => {

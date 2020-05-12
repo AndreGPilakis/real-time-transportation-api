@@ -398,6 +398,7 @@ app.use('/disruptions', function (req, res, next) {
   getDelaysForRoute(req.query.ID,res);
 });
 
+
 //encrypts a signature
 function encryptSignature(url) {
   return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
