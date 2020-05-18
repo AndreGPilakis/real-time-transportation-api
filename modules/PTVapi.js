@@ -70,7 +70,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
 
-    var currentTime = true;
+    var currentTime = false;
     var departures;
 
     if(currentTime){
@@ -86,16 +86,27 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
+        console.log("---Log before Asynch---");
         departures = await getDeparturesFromDatabase(con,stop_id);
+        console.log("departures is : ");
+        console.log(departures);
+        console.log("---Log after Asynch---")
     }
-    // console.log("departures is: ");
+    // console.log("departures is : ");
     // console.log(departures);
     return departures;
 }
 
 async function getDeparturesFromDatabase(con,stop_id){
-    
-    //@TODO fix queries. Hardcoded timestamp for testing.
+    let myresult;
+    con.query(`select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`,function (err, result, fields){
+        myresult = result[0];
+        console.log("MyRes Inside sql query is :  ");
+        console.log(result[0]);
+    });
+    return myresult;
+
+    // @TODO fix queries. Hardcoded timestamp for testing.
     con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
         if (err) throw err;
         let JSONTemplate = "[";
@@ -118,14 +129,17 @@ async function getDeparturesFromDatabase(con,stop_id){
                 "departure_sequence" : ${result[i].departureSequence}
             }`
         }
-        
+        console.log("RESULT IS");
+        console.log(result);
         JSONTemplate += "]";
-        let JSONData = JSON.parse((JSONTemplate));
-        console.log("JSON DATA IS:");
-        console.log(JSONData);
+        // JSONData = JSON.parse((JSONTemplate));
+        // console.log("JSON DATA IS:");
+        // console.log(JSONData);
         
-        // return JSONData;
+        // return "hello world";
       });
+      return result;
+    //   return JSONData;
 }
 
 // Call to PTV API to get all departures for a specific run ID
