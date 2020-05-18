@@ -86,31 +86,23 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        console.log("---Log before Asynch---");
         departures = await getDeparturesFromDatabase(con,stop_id);
-        console.log("departures is : ");
-        console.log(departures);
-        console.log("---Log after Asynch---")
     }
-    // console.log("departures is : ");
-    // console.log(departures);
+    console.log("departures is : ");
+    console.log(departures);
     return departures;
 }
 
-async function getDeparturesFromDatabase(con,stop_id){
-    let myresult;
-    con.query(`select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`,function (err, result, fields){
-        myresult = result[0];
-        console.log("MyRes Inside sql query is :  ");
-        console.log(result[0]);
-    });
-    return myresult;
-
-    // @TODO fix queries. Hardcoded timestamp for testing.
-    con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
-        if (err) throw err;
-        let JSONTemplate = "[";
-        for (i = 0; i < result.length -1; i++){
+async function getDeparturesFromDatabase(con,stop_id){ 
+    return new Promise((resolve, reject) => {
+        const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`;
+        con.query(query, function (err, result, fields){
+            if(err){
+                reject(err);
+                return;
+            }
+            let JSONTemplate = "[";
+            for (i = 0; i < result.length -1; i++){
             if (i > 0){
                 JSONTemplate += ","
             }
@@ -129,18 +121,54 @@ async function getDeparturesFromDatabase(con,stop_id){
                 "departure_sequence" : ${result[i].departureSequence}
             }`
         }
-        console.log("RESULT IS");
-        console.log(result);
         JSONTemplate += "]";
+        //Avoids sending back json that didnt template correctly.
+        // if (JSONTemplate !== "["){
+        console.log("Json template is : ");
+        console.log(JSONTemplate);
+        //Will not parse if bad data is found.
+        if (JSONTemplate !== "["){
+        JSONData = JSON.parse(JSONTemplate);
+        }
+            resolve(JSONData);
+        });
+    })
+}
+    // @TODO fix queries. Hardcoded timestamp for testing.
+    // con.query(`Select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`, function (err, result, fields) {
+    //     if (err) throw err;
+    //     let JSONTemplate = "[";
+    //     for (i = 0; i < result.length -1; i++){
+    //         if (i > 0){
+    //             JSONTemplate += ","
+    //         }
+    //         JSONTemplate += `
+    //         {
+    //             "stop_id": ${result[i].stopID},
+    //             "route_id": ${result[i].routeID},
+    //             "run_id": ${result[i].runID},
+    //             "direction_id" : ${result[i].directionID},
+    //             "disruption_ids" : [],
+    //             "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
+    //             "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
+    //             "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
+    //             "platform_number" : "${result[i].platformNumber}",
+    //             "flags" : "",
+    //             "departure_sequence" : ${result[i].departureSequence}
+    //         }`
+        // }
+        // console.log("RESULT IS");
+        // console.log(result);
+        // JSONTemplate += "]";
         // JSONData = JSON.parse((JSONTemplate));
         // console.log("JSON DATA IS:");
         // console.log(JSONData);
         
         // return "hello world";
-      });
-      return result;
+    //   });
+    //   return result;
     //   return JSONData;
-}
+// }
 
 // Call to PTV API to get all departures for a specific run ID
 async function getDeparturesForRun(run_id, route_type) {
@@ -293,12 +321,14 @@ module.exports = {
             stationDepartures.push(stopDepartures);
 
             // Append departures from a station to associated route departure array
+
             for(let j in stopDepartures.departures) {
+                if (stopDepartures.departures[j] !== null){
                 let routeIndex = getRouteIndex(routes, stopDepartures.departures[j].route_id);
                 if(routeIndex !== -1) {
                     routeDepartures[routeIndex].departures.push(stopDepartures.departures[j]);
                 }
-            }
+            }}
         }
         return {
             routeDepartures: routeDepartures,
