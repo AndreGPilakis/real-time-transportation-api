@@ -416,6 +416,7 @@ function encryptSignature(url) {
 
 async function rewindTime(res){
   console.log("Inside asyn in app.ks");
+  API.setCurrentTime("placeholder");
   res.send("res send");
   return("return from app.js");
 }

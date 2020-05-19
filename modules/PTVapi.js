@@ -8,6 +8,8 @@ const baseURL = 'https://timetableapi.ptv.vic.gov.au';
 const apiKey = process.env.API_KEY;
 const devID = process.env.DEV_ID;
 
+var currentTime = false;
+
 //Connecting to db
 //@TODO Change user/pass
 //@TODO Move SQL to new place?
@@ -69,8 +71,6 @@ function getStationIndex(stops, stop_id) {
 async function getDeparturesForStop(stop_id, route_type, con) {
     const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
     const signature = encryptSignature(request);
-    console.log("-------begining getDepartures-------");
-    var currentTime = true;
     var departures;
 
     if(currentTime){
@@ -90,6 +90,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
 }
 
 
+//@TODO Fix methods
 async function getDeparturesFromDatabase(con,stop_id){ 
     return new Promise((resolve, reject) => {
         const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`;
@@ -119,11 +120,44 @@ async function getDeparturesFromDatabase(con,stop_id){
             }`
         }
         JSONTemplate += "]";
-        //Avoids sending back json that didnt template correctly.
-        // if (JSONTemplate !== "["){
-        // console.log("Json template is : ");
-        // console.log(JSONTemplate);
-        //Will not parse if bad data is found.
+        if (JSONTemplate !== "["){
+        JSONData = JSON.parse(JSONTemplate);
+        }
+            resolve(JSONData);
+        });
+    })
+}
+
+//@TODO merge methods
+async function getDeparturesFromDatabaseByRun(con,run_id){ 
+    return new Promise((resolve, reject) => {
+        const query = `select * from departuresByRun WHERE runID = ${run_id} AND timestamp = '2020-04-19 11:26:00'`;
+        con.query(query, function (err, result, fields){
+            if(err){
+                reject(err);
+                return;
+            }
+            let JSONTemplate = "[";
+            for (i = 0; i < result.length -1; i++){
+            if (i > 0){
+                JSONTemplate += ","
+            }
+            JSONTemplate += `
+            {
+                "stop_id": ${result[i].stopID},
+                "route_id": ${result[i].routeID},
+                "run_id": ${result[i].runID},
+                "direction_id" : ${result[i].directionID},
+                "disruption_ids" : [],
+                "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
+                "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
+                "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
+                "platform_number" : "${result[i].platformNumber}",
+                "flags" : "",
+                "departure_sequence" : ${result[i].departureSequence}
+            }`
+        }
+        JSONTemplate += "]";
         if (JSONTemplate !== "["){
         JSONData = JSON.parse(JSONTemplate);
         }
@@ -136,16 +170,23 @@ async function getDeparturesFromDatabase(con,stop_id){
 async function getDeparturesForRun(run_id, route_type) {
     const request = '/v3/pattern/run/' + run_id + '/route_type/' + route_type + '?expand=stop&devid=' + devID;
     const signature = encryptSignature(request);
-
-    const departures = await axios.get(baseURL + request + '&signature=' + signature)
+    var departures;
+    // if (currentTime){
+    departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            console.log("Departures for run");
+            saveDepartureToDatabaseByRun(con,response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
             console.log(error);
             return [];
         })
+    // }
+    // else{
+    //     departures = await getDeparturesFromDatabaseByRun(con,run_id);
+    //     console.log("departures is : ");
+    //     console.log(departures);
+    // }
     return departures;
 }
 
@@ -153,8 +194,13 @@ async function getDeparturesForRun(run_id, route_type) {
 function initializeDatabase(con){
 //Departures table for by stop
 createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber int, departureSequence int, timestamp datetime)");
+//Departures table by run
+createTable(con,"CREATE TABLE IF NOT EXISTS departuresByRun (stopID int, routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber varchar(255), departureSequence int, timestamp datetime)");
 }
 
+//@TODO rename & refreactor
+//While these methods my look very similar, for whatever reason the PTV API returns the departure sequence
+// as an integer in
 //saves a Departue to the database whenever an api call is made.
 function saveDepartureToDatabase(con,data){
     for (i = 0; i <=data.length-1; i++){
@@ -164,6 +210,17 @@ function saveDepartureToDatabase(con,data){
           if (err) throw err;
         });
     }
+}
+
+//Saves a departure to database whenever an pi call is me for departures by run.
+function saveDepartureToDatabaseByRun(con, data){
+    for (i = 0; i <=data.length-1; i++){
+        var sql = `INSERT INTO departuresByRun (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
+        VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, '${data[i].platform_number}', ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
+            con.query(sql, function (err, result) {
+              if (err) throw err;
+            });
+        }
 }
 
 //Converts time format from 'YYYY-MM-DDTHH:MM:SSZ' -> 'YYYY-MM-DD HH:MM:SS'
@@ -198,11 +255,8 @@ function convertDateTimeToApiFormat(dateTime){
 
 //Function to create a table, takes in an sql Statement and handles errors to avoid code dupelication
 function createTable(con, sql){
-    con.connect(function(err) {
-        if (err) throw err;
         con.query(sql, function (err, result) {
           if (err) throw err;
-        });
       });
 }
 
@@ -237,6 +291,10 @@ module.exports = {
             })
         return stops;
     },
+    setCurrentTime(time){
+        console.log("set current time: " + time);
+        currentTime = false;
+    },
     /**
      * Retrieve all the departures for stations and routes
      *
@@ -268,7 +326,6 @@ module.exports = {
                 stop_longitude: stop.stop_longitude,
                 departures: await getDeparturesForStop(stop.stop_id, route_type, con)
                 .then(response => {
-                    // console.log("Is getting something from await");
                     return response;
                 })
                 .catch(error => {
@@ -319,6 +376,7 @@ module.exports = {
             const run_id = uniqueRunIDs[i];
 
             // Get all departures for a station
+            
             let departures = await getDeparturesForRun(run_id, route_type)
                 .then(response => {
                     return response;
@@ -354,7 +412,7 @@ module.exports = {
                         currentDeparture: currentDeparture
                     };
                     console.log("(" + i + "/" + uniqueRunIDs.length +
-                                ") Updating RunIDasdasdasdsd " + run_id);
+                                ") Updating RunID " + run_id);
                     runDepartures.push(runIDDepartures);
 
                     // Append departures from a runID to associated station departure array
