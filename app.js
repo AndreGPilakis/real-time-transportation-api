@@ -161,6 +161,7 @@ async function getStopsForRoute(route_id, stops) {
  * @param stops           collection of stops in a route
  */
 async function getDeparturesForStops(stops) {
+  console.log("--------getDeparturesForStops-------");
   await API.getDepartures(routes, ROUTE_TYPE, uniqueStops)
       .then(response => {
         let routeDepartures = response.routeDepartures;
