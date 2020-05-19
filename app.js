@@ -404,12 +404,21 @@ app.use('/mykireaders', function (req, res, next){
   getMyKiReaders(req.query.latitude, req.query.longitude, res);
 });
 
+app.use('/rewindTime', function (req, res, next){
+  rewindTime(res);
+});
+
 
 //encrypts a signature
 function encryptSignature(url) {
   return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
 }
 
+async function rewindTime(res){
+  console.log("Inside asyn in app.ks");
+  res.send("res send");
+  return("return from app.js");
+}
 
 //@TODO move to PTVapi.js
 async function getMyKiReaders(latitude,longitude,res){

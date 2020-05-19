@@ -86,8 +86,6 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     } else{
         departures = await getDeparturesFromDatabase(con,stop_id);
     }
-
-
     return departures;
 }
 
