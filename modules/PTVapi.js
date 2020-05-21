@@ -70,18 +70,18 @@ function getStationIndex(stops, stop_id) {
     return result;
 }
 
-//@TODO declutter this method.
 // Call to PTV API to get all departures for a specific stop
 async function getDeparturesForStop(stop_id, route_type, con) {
-    const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
-    const signature = encryptSignature(request);
+
     var departures;
 
+    //If no timestamp is specified in the .env file, live data is retrieved
     if(!searchTime){
-        console.log("not search time");
-    departures = await axios.get(baseURL + request + '&signature=' + signature)
+        const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
+        const signature = encryptSignature(request);
+        departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            saveDepartureToDatabase(con,response.data.departures);
+            // saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
@@ -89,8 +89,9 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        let timestamp = await getNearestTimestamp("sample");
-        departures = await getDeparturesFromDatabase(con,stop_id,timestamp);
+        //Finds the closest timestamp to the one entered incase the timestamp is not exact.
+        // let timestamp = await getNearestTimestamp(currentTime);
+        departures = await getDeparturesFromDatabase(con,stop_id,'2020-03-08 13:48:00');
     }
     return departures;
 }
@@ -101,8 +102,8 @@ async function getNearestTimestamp(timestamp){
     return new Promise((resolve, reject) =>{
         const query = `select * from departures where timestamp <= '${timestamp}' ORDER BY timestamp LIMIT 1;`
         con.query(query,function (err, result, fields){
-            let closestTime = result[0].timestamp;
-            resolve(closestTime);
+            let closestTime = new Date(result[0].timestamp);
+            resolve(convertDateTimeToDbFormat(closestTime));
         });
     })
 }
@@ -110,8 +111,9 @@ async function getNearestTimestamp(timestamp){
 // This function retrieves data from the database based on the entered search timestamp
 async function getDeparturesFromDatabase(con,stop_id, timestamp){
     return new Promise((resolve, reject) => {
-        console.log("timestamp is : " + timestamp);
-        const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-19 12:24:00'`;
+        // console.log("timestamp is : " + timestamp);
+        const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '${timestamp}'`;
+        console.log(query);
         con.query(query, function (err, result, fields){
             if(err){
                 reject(err);
@@ -198,19 +200,13 @@ async function getDeparturesForRun(run_id, route_type) {
     // if (currentTime){
     departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            saveDepartureToDatabaseByRun(con,response.data.departures);
+            // saveDepartureToDatabaseByRun(con,response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
             console.log(error);
             return [];
         })
-    // }
-    // else{
-    //     departures = await getDeparturesFromDatabaseByRun(con,run_id);
-    //     console.log("departures is : ");
-    //     console.log(departures);
-    // }
     return departures;
 }
 
@@ -259,14 +255,13 @@ function removeFlagsFromDateTime(dateTime){
     return newDate;
 }
 
-//@TODO These methods are similar, possibly refractor?
-//returns the current dateTime in a format for the SQL database
-function getCurrentDateTimeFromatted(){
-    var currentdate = new Date();
-    var datetime = currentdate.getFullYear() + "-" + currentdate.getMonth() 
-    + "-" + currentdate.getDate() + " " 
-    + ("0" + currentdate.getHours()).slice(-2) + ":" 
-    + ("0" + currentdate.getMinutes()).slice(-2) + ":" + ("00");
+// Converts a datetime object to the format YYYY-MM-DD
+function convertDateTimeToDbFormat(timestamp){
+    var datetime = timestamp.getFullYear() 
+    + "-" + ("0"+timestamp.getMonth()).slice(-2) 
+    + "-" + ("0"+timestamp.getDate()).slice(-2) + " " 
+    + ("0" + timestamp.getHours()).slice(-2) + ":" 
+    + ("0" + timestamp.getMinutes()).slice(-2) + ":" + ("00");
     return datetime;
 }
 
