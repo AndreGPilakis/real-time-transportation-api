@@ -8,16 +8,20 @@ const baseURL = 'https://timetableapi.ptv.vic.gov.au';
 const apiKey = process.env.API_KEY;
 const devID = process.env.DEV_ID;
 
-var currentTime = false;
+const dbHost = process.env.DB_HOST;
+const dbUser = process.env.DB_USER;
+const dbPass = process.env.DB_PASSWORD;
+const dbName = process.env.DB_NAME;
+const searchTime = process.env.SEARCH_TIME
+
+var currentTime = true;
 
 //Connecting to db
-//@TODO Change user/pass
-//@TODO Move SQL to new place?
 var con = mysql.createConnection({
-    host: "localhost",
-    user: "andre",
-    password: "ptv123",
-    database: "ptv"
+    host: dbHost,
+    user: dbUser,
+    password: dbPass,
+    database: dbName
   });
 
 initializeDatabase(con);
@@ -73,7 +77,8 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     const signature = encryptSignature(request);
     var departures;
 
-    if(currentTime){
+    if(!searchTime){
+        console.log("not search time");
     departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
             saveDepartureToDatabase(con,response.data.departures);
@@ -84,16 +89,29 @@ async function getDeparturesForStop(stop_id, route_type, con) {
             return [];
         })
     } else{
-        departures = await getDeparturesFromDatabase(con,stop_id);
+        let timestamp = await getNearestTimestamp("sample");
+        departures = await getDeparturesFromDatabase(con,stop_id,timestamp);
     }
     return departures;
 }
 
+// Returns the most recent timestamp to the one entered.
+// does NOT return the closest timestamp if that timestamp is earlier than the given timestamp.
+async function getNearestTimestamp(timestamp){
+    return new Promise((resolve, reject) =>{
+        const query = `select * from departures where timestamp <= '${timestamp}' ORDER BY timestamp LIMIT 1;`
+        con.query(query,function (err, result, fields){
+            let closestTime = result[0].timestamp;
+            resolve(closestTime);
+        });
+    })
+}
 
-//@TODO Fix methods
-async function getDeparturesFromDatabase(con,stop_id){ 
+// This function retrieves data from the database based on the entered search timestamp
+async function getDeparturesFromDatabase(con,stop_id, timestamp){
     return new Promise((resolve, reject) => {
-        const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-08 13:48:00'`;
+        console.log("timestamp is : " + timestamp);
+        const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '2020-04-19 12:24:00'`;
         con.query(query, function (err, result, fields){
             if(err){
                 reject(err);
@@ -127,6 +145,12 @@ async function getDeparturesFromDatabase(con,stop_id){
         });
     })
 }
+
+// async function getClosestExistingTimestamp(timestamp){
+//     return new Promise((resolve, reject) => {
+//         resolve(timestamp);
+//     })
+// }
 
 //@TODO merge methods
 async function getDeparturesFromDatabaseByRun(con,run_id){ 
