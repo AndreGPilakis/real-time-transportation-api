@@ -24,9 +24,10 @@ var con = mysql.createConnection({
     database: dbName
   });
 
+//Created tables if needed
 initializeDatabase(con);
 
-// Time of last Client API call (Date().getTime())
+// Time of last Client API call
 let lastUpdate;
 
 // Generate signature for the API request
@@ -34,6 +35,8 @@ function encryptSignature(url) {
     return crypto.createHmac('sha1', apiKey).update(url).digest('hex');
 }
 
+
+// Compares 2 stops, checks which will arrive first
 function compareStops(a, b) {
     const aStopSequence = a.stop_sequence;
     const bStopSequence = b.stop_sequence;
@@ -71,17 +74,16 @@ function getStationIndex(stops, stop_id) {
 }
 
 // Call to PTV API to get all departures for a specific stop
+// If a current searchTime has been specified, query the database for historical data.
 async function getDeparturesForStop(stop_id, route_type, con) {
-
     var departures;
-
     //If no timestamp is specified in the .env file, live data is retrieved
     if(!searchTime){
         const request = '/v3/departures/route_type/' + route_type + '/stop/' + stop_id + '?look_backwards=false&max_results=1&devid=' + devID;
         const signature = encryptSignature(request);
         departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
-            // saveDepartureToDatabase(con,response.data.departures);
+            saveDepartureToDatabase(con,response.data.departures);
             return response.data.departures;
         })
         .catch(error => {
@@ -90,8 +92,9 @@ async function getDeparturesForStop(stop_id, route_type, con) {
         })
     } else{
         //Finds the closest timestamp to the one entered incase the timestamp is not exact.
-        // let timestamp = await getNearestTimestamp(currentTime);
-        departures = await getDeparturesFromDatabase(con,stop_id,'2020-03-08 13:48:00');
+        let timestamp = await getNearestTimestamp(searchTime);
+        console.log ("searchtime is : " + searchTime);
+        departures = await getDeparturesFromDatabase(con,stop_id,searchTime);
     }
     return departures;
 }
@@ -99,6 +102,7 @@ async function getDeparturesForStop(stop_id, route_type, con) {
 // Returns the most recent timestamp to the one entered.
 // does NOT return the closest timestamp if that timestamp is earlier than the given timestamp.
 async function getNearestTimestamp(timestamp){
+    console.log("searching with timestamp : " + timestamp)
     return new Promise((resolve, reject) =>{
         const query = `select * from departures where timestamp <= '${timestamp}' ORDER BY timestamp LIMIT 1;`
         con.query(query,function (err, result, fields){
@@ -108,62 +112,17 @@ async function getNearestTimestamp(timestamp){
     })
 }
 
-// This function retrieves data from the database based on the entered search timestamp
+// This function retrieves data from the database based on the entered search timestamp and stop_id.
 async function getDeparturesFromDatabase(con,stop_id, timestamp){
     return new Promise((resolve, reject) => {
-        // console.log("timestamp is : " + timestamp);
         const query = `select * from departures WHERE stopID = ${stop_id} AND timestamp = '${timestamp}'`;
-        console.log(query);
         con.query(query, function (err, result, fields){
             if(err){
                 reject(err);
                 return;
             }
             let JSONTemplate = "[";
-            for (i = 0; i < result.length -1; i++){
-            if (i > 0){
-                JSONTemplate += ","
-            }
-            JSONTemplate += `
-            {
-                "stop_id": ${result[i].stopID},
-                "route_id": ${result[i].routeID},
-                "run_id": ${result[i].runID},
-                "direction_id" : ${result[i].directionID},
-                "disruption_ids" : [],
-                "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
-                "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
-                "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
-                "platform_number" : "${result[i].platformNumber}",
-                "flags" : "",
-                "departure_sequence" : ${result[i].departureSequence}
-            }`
-        }
-        JSONTemplate += "]";
-        if (JSONTemplate !== "["){
-        JSONData = JSON.parse(JSONTemplate);
-        }
-            resolve(JSONData);
-        });
-    })
-}
-
-// async function getClosestExistingTimestamp(timestamp){
-//     return new Promise((resolve, reject) => {
-//         resolve(timestamp);
-//     })
-// }
-
-//@TODO merge methods
-async function getDeparturesFromDatabaseByRun(con,run_id){ 
-    return new Promise((resolve, reject) => {
-        const query = `select * from departuresByRun WHERE runID = ${run_id} AND timestamp = '2020-04-19 11:26:00'`;
-        con.query(query, function (err, result, fields){
-            if(err){
-                reject(err);
-                return;
-            }
-            let JSONTemplate = "[";
+            //Formats the result into a JSON format so that it is readable by the middleware.
             for (i = 0; i < result.length -1; i++){
             if (i > 0){
                 JSONTemplate += ","
@@ -197,10 +156,10 @@ async function getDeparturesForRun(run_id, route_type) {
     const request = '/v3/pattern/run/' + run_id + '/route_type/' + route_type + '?expand=stop&devid=' + devID;
     const signature = encryptSignature(request);
     var departures;
-    // if (currentTime){
     departures = await axios.get(baseURL + request + '&signature=' + signature)
         .then(response => {
             // saveDepartureToDatabaseByRun(con,response.data.departures);
+            // Above method is depreciated, has been left in comment for future developers.
             return response.data.departures;
         })
         .catch(error => {
@@ -214,13 +173,11 @@ async function getDeparturesForRun(run_id, route_type) {
 function initializeDatabase(con){
 //Departures table for by stop
 createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber int, departureSequence int, timestamp datetime)");
-//Departures table by run
-createTable(con,"CREATE TABLE IF NOT EXISTS departuresByRun (stopID int, routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber varchar(255), departureSequence int, timestamp datetime)");
+// Departures table by run - This table did not fully function on release, table SCHEMA has been left for future
+// development groups.
+// createTable(con,"CREATE TABLE IF NOT EXISTS departuresByRun (stopID int, routeID int, runID int, directionID int, scheduledDeparture datetime, estimatedDeparture datetime, atPlatform boolean, platformNumber varchar(255), departureSequence int, timestamp datetime)");
 }
 
-//@TODO rename & refreactor
-//While these methods my look very similar, for whatever reason the PTV API returns the departure sequence
-// as an integer in
 //saves a Departue to the database whenever an api call is made.
 function saveDepartureToDatabase(con,data){
     for (i = 0; i <=data.length-1; i++){
@@ -232,16 +189,6 @@ function saveDepartureToDatabase(con,data){
     }
 }
 
-//Saves a departure to database whenever an pi call is me for departures by run.
-function saveDepartureToDatabaseByRun(con, data){
-    for (i = 0; i <=data.length-1; i++){
-        var sql = `INSERT INTO departuresByRun (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
-        VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, '${data[i].platform_number}', ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
-            con.query(sql, function (err, result) {
-              if (err) throw err;
-            });
-        }
-}
 
 //Converts time format from 'YYYY-MM-DDTHH:MM:SSZ' -> 'YYYY-MM-DD HH:MM:SS'
 //Seconds are left as 00 to avoid too much variance in times when backtracking.
@@ -255,7 +202,10 @@ function removeFlagsFromDateTime(dateTime){
     return newDate;
 }
 
-// Converts a datetime object to the format YYYY-MM-DD
+// Converts a datetime object to the format YYYY-MM-DD HH-MM-SS
+// Seconds left as 00 to avoid too much variance when retrieving data.
+// getMonth/getDates by defualt return their values at M/D rather than MM/DD,
+// To correct this formatting we add zero then slice so they are always in MM/DD format.
 function convertDateTimeToDbFormat(timestamp){
     var datetime = timestamp.getFullYear() 
     + "-" + ("0"+timestamp.getMonth()).slice(-2) 
@@ -493,3 +443,57 @@ module.exports = {
     }
 };
 
+/* This function has been left in for future developers of the project. It functions correctly
+In the sense that it will correctly retrieve data from a database if needed, however for whatever reason the data is not
+properly passed to the middleware correctly. Usually I would delete this code if I were to publish a project, however because
+another capstone group will eventually use this code it has been left in. */
+
+// async function getDeparturesFromDatabaseByRun(con,run_id){ 
+//     return new Promise((resolve, reject) => {
+//         const query = `select * from departuresByRun WHERE runID = ${run_id} AND timestamp = '2020-04-19 11:26:00'`;
+//         con.query(query, function (err, result, fields){
+//             if(err){
+//                 reject(err);
+//                 return;
+//             }
+//             let JSONTemplate = "[";
+//             for (i = 0; i < result.length -1; i++){
+//             if (i > 0){
+//                 JSONTemplate += ","
+//             }
+//             JSONTemplate += `
+//             {
+//                 "stop_id": ${result[i].stopID},
+//                 "route_id": ${result[i].routeID},
+//                 "run_id": ${result[i].runID},
+//                 "direction_id" : ${result[i].directionID},
+//                 "disruption_ids" : [],
+//                 "scheduled_departure_utc" : "${convertDateTimeToApiFormat(result[i].scheduledDeparture)}",
+//                 "estimated_departure_utc" : "${convertDateTimeToApiFormat(result[i].estimatedDeparture)}",
+//                 "at_platform" : ${(result[i].atPlatform === 1 ? true : false)},
+//                 "platform_number" : "${result[i].platformNumber}",
+//                 "flags" : "",
+//                 "departure_sequence" : ${result[i].departureSequence}
+//             }`
+//         }
+//         JSONTemplate += "]";
+//         if (JSONTemplate !== "["){
+//         JSONData = JSON.parse(JSONTemplate);
+//         }
+//             resolve(JSONData);
+//         });
+//     })
+// }
+
+/*Saves a departure to database whenever an pi call is me for departures by run.
+ This function is also not in use as the middleware would not read the data correctly.
+ I have left the code here for future development goups. */
+// function saveDepartureToDatabaseByRun(con, data){
+//     for (i = 0; i <=data.length-1; i++){
+//         var sql = `INSERT INTO departuresByRun (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
+//         VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, '${data[i].platform_number}', ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
+//             con.query(sql, function (err, result) {
+//               if (err) throw err;
+//             });
+//         }
+// }
