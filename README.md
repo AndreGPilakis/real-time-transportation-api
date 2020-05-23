@@ -1,4 +1,4 @@
-# Real-Time Transportation API :)
+# Real-Time Transportation API 
 
 This is the API for [Real-Time Transportation Map](https://github.com/JX-Siaw/real-time-transportation-map). It uses the [PTV Timetable API](https://timetableapi.ptv.vic.gov.au/swagger/ui/index#/) to generate the view required for the real-time transportation map.
 
