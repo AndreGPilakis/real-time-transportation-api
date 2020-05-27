@@ -14,8 +14,7 @@ const dbPass = process.env.DB_PASSWORD;
 const dbName = process.env.DB_NAME;
 const searchTime = process.env.SEARCH_TIME
 
-var currentTime = true;
-
+console.log("search time is:" + searchTime);
 //Connecting to db
 var con = mysql.createConnection({
     host: dbHost,
@@ -93,9 +92,11 @@ async function getDeparturesForStop(stop_id, route_type, con) {
     } else{
         //Finds the closest timestamp to the one entered incase the timestamp is not exact.
         let timestamp = await getNearestTimestamp(searchTime);
-        console.log ("searchtime is : " + searchTime);
-        departures = await getDeparturesFromDatabase(con,stop_id,searchTime);
+        console.log("timestamp is : " + timestamp);
+        departures = await getDeparturesFromDatabase(con,stop_id,timestamp);
     }
+    console.log("departures:");
+    console.log(departures);
     return departures;
 }
 
@@ -105,8 +106,11 @@ async function getNearestTimestamp(timestamp){
     console.log("searching with timestamp : " + timestamp)
     return new Promise((resolve, reject) =>{
         const query = `select * from departures where timestamp <= '${timestamp}' ORDER BY timestamp LIMIT 1;`
+        console.log("Query: " + query);
         con.query(query,function (err, result, fields){
             let closestTime = new Date(result[0].timestamp);
+            console.log("Before convert:" + closestTime);
+            console.log("After convert: " + convertDateTimeToDbFormat(closestTime)); 
             resolve(convertDateTimeToDbFormat(closestTime));
         });
     })
@@ -182,7 +186,7 @@ createTable(con,"CREATE TABLE IF NOT EXISTS departures (stopID int,routeID int, 
 function saveDepartureToDatabase(con,data){
     for (i = 0; i <=data.length-1; i++){
     var sql = `INSERT INTO departures (stopID, routeID, runID, directionID, scheduledDeparture, estimatedDeparture, atPlatform, platformNumber, departureSequence, timestamp)
-    VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, ${data[i].platform_number}, ${data[i].departure_sequence}, '${getCurrentDateTimeFromatted()}');`
+    VALUES (${data[i].stop_id}, ${data[i].route_id}, ${data[i].run_id}, ${data[i].direction_id}, ${removeFlagsFromDateTime(data[i].scheduled_departure_utc)}, ${removeFlagsFromDateTime(data[i].estimated_departure_utc)}, ${data[i].at_platform}, ${data[i].platform_number}, ${data[i].departure_sequence}, '${convertDateTimeToDbFormat(new Date())}');`
         con.query(sql, function (err, result) {
           if (err) throw err;
         });
@@ -207,8 +211,9 @@ function removeFlagsFromDateTime(dateTime){
 // getMonth/getDates by defualt return their values at M/D rather than MM/DD,
 // To correct this formatting we add zero then slice so they are always in MM/DD format.
 function convertDateTimeToDbFormat(timestamp){
+    console.log("month is : " + timestamp.getMonth())
     var datetime = timestamp.getFullYear() 
-    + "-" + ("0"+timestamp.getMonth()).slice(-2) 
+    + "-" + ("0"+(timestamp.getMonth()+1)).slice(-2) 
     + "-" + ("0"+timestamp.getDate()).slice(-2) + " " 
     + ("0" + timestamp.getHours()).slice(-2) + ":" 
     + ("0" + timestamp.getMinutes()).slice(-2) + ":" + ("00");
@@ -260,10 +265,7 @@ module.exports = {
             })
         return stops;
     },
-    setCurrentTime(time){
-        console.log("set current time: " + time);
-        currentTime = false;
-    },
+
     /**
      * Retrieve all the departures for stations and routes
      *

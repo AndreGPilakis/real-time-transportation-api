@@ -343,7 +343,7 @@ async function checkRouteTypeToggleRequest() {
 initiate();
 refresh = setInterval(repetition, ptvAPIRepFreq);
 
-// TODO: Cleanup
+
 // Cyclic dependency with index.js, module.exports must be called before requiring index.js.
 // Possibly move route type into PTVapi.js instead.
 module.exports = {
@@ -464,8 +464,6 @@ async function getDelaysForRoute(route_id, res){
       })
   return delays
 }
-
-
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
