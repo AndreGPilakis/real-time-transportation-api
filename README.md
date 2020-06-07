@@ -75,6 +75,8 @@ Make sure a reverse proxy is set up allowing the web app to call the API at the 
 * **Jeremy Siaw** - *Initial work*
 * **Ngoc Tran** - *Follow up work*
 * **Sean Martin** - *Follow up work*
+* **Andre Pilakis** - *Follow up work*
+
 
 ## License
 
